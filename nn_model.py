@@ -253,7 +253,10 @@ class StiffnessSurrogateModel:
 
     def load_checkpoint(self, path: str):
         """Wczytuje wagi modelu i stan scalerów."""
-        checkpoint = torch.load(path, map_location=self.device)
+        try:
+            checkpoint = torch.load(path, map_location=self.device, weights_only=False)
+        except TypeError:
+            checkpoint = torch.load(path, map_location=self.device)
         self.scaler_X = checkpoint["scaler_X"]
         self.scaler_y = checkpoint["scaler_y"]
         self.history = checkpoint.get("history", {})

@@ -14,8 +14,14 @@ import streamlit as st
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+import importlib
 import tpms_generator as tg
 import nn_model as nm
+import export_3d as exp3d
+
+importlib.reload(tg)
+importlib.reload(nm)
+importlib.reload(exp3d)
 
 # ==========================================
 # Konfiguracja strony Streamlit
@@ -103,16 +109,60 @@ st.markdown(
 # ==========================================
 # Inicjalizacja stanu sesji i Caching
 # ==========================================
+# Inicjalizacja stanu sesji i Caching
+# ==========================================
 @st.cache_data(show_spinner=False)
-def get_cached_gyroid_grid(nx: float, ny: float, nz: float, t: float, resolution: int):
-    """Generowanie siatki z pamięcią podręczną."""
-    return tg.generate_gyroid_grid(nx, ny, nz, t, resolution=resolution)
+def get_cached_tpms_grid(tpms_type: str, nx: float, ny: float, nz: float, t: float, resolution: int, mode: str = "network", wall_thickness: float = 0.20):
+    """Generowanie siatki TPMS / Auxetic z pamięcią podręczną."""
+    return tg.generate_tpms_grid(tpms_type, nx, ny, nz, t, resolution=resolution, mode=mode, wall_thickness=wall_thickness)
 
 
 @st.cache_data(show_spinner=False)
-def get_cached_synthetic_data(num_samples: int, noise_level: float, seed: int):
+def get_cached_gyroid_grid(nx: float, ny: float, nz: float, t: float, resolution: int, mode: str = "network", wall_thickness: float = 0.20):
+    """Generowanie siatki Gyroidu z pamięcią podręczną."""
+    return get_cached_tpms_grid("gyroid", nx, ny, nz, t, resolution=resolution, mode=mode, wall_thickness=wall_thickness)
+
+
+@st.cache_data(show_spinner=False)
+def get_cached_diamond_grid(nx: float, ny: float, nz: float, t: float, resolution: int, mode: str = "network", wall_thickness: float = 0.20):
+    """Generowanie siatki Schwarz Diamond z pamięcią podręczną."""
+    return get_cached_tpms_grid("diamond", nx, ny, nz, t, resolution=resolution, mode=mode, wall_thickness=wall_thickness)
+
+
+@st.cache_data(show_spinner=False)
+def get_cached_primitive_grid(nx: float, ny: float, nz: float, t: float, resolution: int, mode: str = "network", wall_thickness: float = 0.20):
+    """Generowanie siatki Schwarz Primitive z pamięcią podręczną."""
+    return get_cached_tpms_grid("primitive", nx, ny, nz, t, resolution=resolution, mode=mode, wall_thickness=wall_thickness)
+
+
+@st.cache_data(show_spinner=False)
+def get_cached_auxetic_grid(nx: float, ny: float, nz: float, t: float, resolution: int, mode: str = "network", wall_thickness: float = 0.20):
+    """Generowanie siatki Re-entrant Auxetic z pamięcią podręczną."""
+    return get_cached_tpms_grid("auxetic", nx, ny, nz, t, resolution=resolution, mode=mode, wall_thickness=wall_thickness)
+
+
+@st.cache_data(show_spinner=False)
+def get_cached_neovius_grid(nx: float, ny: float, nz: float, t: float, resolution: int, mode: str = "network", wall_thickness: float = 0.20):
+    """Generowanie siatki Schoen Neovius C(P) z pamięcią podręczną."""
+    return get_cached_tpms_grid("neovius", nx, ny, nz, t, resolution=resolution, mode=mode, wall_thickness=wall_thickness)
+
+
+@st.cache_data(show_spinner=False)
+def get_cached_iwp_grid(nx: float, ny: float, nz: float, t: float, resolution: int, mode: str = "network", wall_thickness: float = 0.20):
+    """Generowanie siatki Schoen I-WP z pamięcią podręczną."""
+    return get_cached_tpms_grid("iwp", nx, ny, nz, t, resolution=resolution, mode=mode, wall_thickness=wall_thickness)
+
+
+@st.cache_data(show_spinner=False)
+def get_cached_octet_grid(nx: float, ny: float, nz: float, t: float, resolution: int, mode: str = "network", wall_thickness: float = 0.20):
+    """Generowanie siatki Octet-Truss (Schoen F-RD) z pamięcią podręczną."""
+    return get_cached_tpms_grid("octet", nx, ny, nz, t, resolution=resolution, mode=mode, wall_thickness=wall_thickness)
+
+
+@st.cache_data(show_spinner=False)
+def get_cached_synthetic_data(num_samples: int, noise_level: float, seed: int, tpms_type: str = "gyroid", mode: str = "network", wall_thickness: float = 0.20):
     """Generowanie danych syntetycznych z pamięcią podręczną."""
-    return tg.generate_synthetic_dataset(num_samples=num_samples, noise_level=noise_level, random_seed=seed)
+    return tg.generate_synthetic_dataset(num_samples=num_samples, noise_level=noise_level, random_seed=seed, tpms_type=tpms_type, mode=mode, wall_thickness=wall_thickness)
 
 
 @st.cache_data(show_spinner=False)
@@ -121,8 +171,174 @@ def get_cached_young_surface(C: np.ndarray, num_theta: int = 40, num_phi: int = 
     return tg.calculate_directional_youngs_modulus(C, num_theta=num_theta, num_phi=num_phi)
 
 
+def get_bounding_box_trace(Lx: float = 1.0, Ly: float = 1.0, Lz: float = 1.0, color: str = "#334155", width: float = 2.0) -> go.Scatter3d:
+    """Tworzy ścieżkę 3D krawędzi obramowania komórki elementarnej (12 krawędzi prostopadłościanu)."""
+    x = [0, Lx, Lx, 0, 0, None, 0, Lx, Lx, 0, 0, None, 0, 0, None, Lx, Lx, None, Lx, Lx, None, 0, 0]
+    y = [0, 0, Ly, Ly, 0, None, 0, 0, Ly, Ly, 0, None, 0, 0, None, 0, 0, None, Ly, Ly, None, Ly, Ly]
+    z = [0, 0, 0, 0, 0, None, Lz, Lz, Lz, Lz, Lz, None, 0, Lz, None, 0, Lz, None, 0, Lz, None, 0, Lz]
+    return go.Scatter3d(
+        x=x,
+        y=y,
+        z=z,
+        mode="lines",
+        line=dict(color=color, width=width),
+        hoverinfo="none",
+        showlegend=False,
+        name="Krawędzie komórki",
+    )
+
+
+def build_gallery_figure(
+    X: np.ndarray,
+    Y: np.ndarray,
+    Z: np.ndarray,
+    F: np.ndarray,
+    colorscale: str,
+    opacity: float = 0.85,
+    show_edges: bool = True,
+    show_bbox: bool = True,
+    height: int = 360,
+) -> go.Figure:
+    """Buduje wykres 3D Isosurface z obsługą przezroczystości, krawędzi konturów i ramki komórki elementarnej."""
+    contour_cfg = dict(show=True, color="#0f172a", width=3) if show_edges else dict(show=False)
+    fig = go.Figure(
+        data=go.Isosurface(
+            x=X.flatten(),
+            y=Y.flatten(),
+            z=Z.flatten(),
+            value=F.flatten(),
+            isomin=-0.08,
+            isomax=0.08,
+            surface_count=2,
+            colorscale=colorscale,
+            opacity=opacity,
+            caps=dict(x_show=False, y_show=False, z_show=False),
+            contour=contour_cfg,
+            showscale=False,
+        )
+    )
+    if show_bbox:
+        fig.add_trace(get_bounding_box_trace(Lx=1.0, Ly=1.0, Lz=1.0, color="#334155", width=2.5))
+    fig.update_layout(
+        scene=dict(
+            xaxis=dict(title="X", nticks=4),
+            yaxis=dict(title="Y", nticks=4),
+            zaxis=dict(title="Z", nticks=4),
+            camera=dict(eye=dict(x=1.6, y=1.6, z=1.4)),
+            aspectmode="cube",
+        ),
+        margin=dict(l=0, r=0, b=0, t=10),
+        height=height,
+    )
+    return fig
+
+
+def apply_preset():
+    """Obsługa zmiany konfiguracji predefiniowanej (Preset)."""
+    preset_name = st.session_state.get("preset_selector", "Własna konfiguracja (Custom)")
+    if preset_name == "Własna konfiguracja (Custom)":
+        return
+
+    preset_configs = {
+        "Izotropowy standardowy (nx=2, ny=2, nz=2, t=0)": {
+            "nx": 2.0, "ny": 2.0, "nz": 2.0, "t": 0.0,
+        },
+        "Anizotropowy belkowy (nx=4.5, ny=1.5, nz=1.5, t=0.1)": {
+            "nx": 4.5, "ny": 1.5, "nz": 1.5, "t": 0.1,
+        },
+        "Płytowy / Warstwowy (nx=1.5, ny=1.5, nz=4.5, t=-0.2)": {
+            "nx": 1.5, "ny": 1.5, "nz": 4.5, "t": -0.2,
+        },
+        "Ultra-sztywny Octet-Truss (Schoen F-RD, kratownica)": {
+            "tpms": "Octet", "tpms_label": "🏗️ Octet-Truss (Schoen F-RD)",
+            "mode": "network", "mode_label": "🧱 Network (Lity szkielet f ≤ t)",
+            "nx": 2.0, "ny": 2.0, "nz": 2.0, "t": 0.0,
+        },
+        "Wielokanałowy Neovius (Schoen C(P), 12 kanałów)": {
+            "tpms": "Neovius", "tpms_label": "🕸️ Neovius (Schoen C(P))",
+            "mode": "network", "mode_label": "🧱 Network (Lity szkielet f ≤ t)",
+            "nx": 2.0, "ny": 2.0, "nz": 2.0, "t": 0.0,
+        },
+        "Asymetryczny labirynt I-WP (Schoen I-WP, 2 płyny)": {
+            "tpms": "I-WP", "tpms_label": "🔀 Schoen I-WP (Asymetryczny)",
+            "mode": "network", "mode_label": "🧱 Network (Lity szkielet f ≤ t)",
+            "nx": 2.0, "ny": 2.0, "nz": 2.0, "t": 0.0,
+        },
+        "Pochłaniacz energii (Auksetyk, nu < 0)": {
+            "tpms": "Auxetic", "tpms_label": "🎀 Re-entrant Auxetic (ν < 0)",
+            "mode": "network", "mode_label": "🧱 Network (Lity szkielet f ≤ t)",
+            "nx": 2.0, "ny": 2.0, "nz": 2.0, "t": 0.0,
+        },
+        "Wymiennik ciepła (Primitive Sheet, wysoki przepływ)": {
+            "tpms": "Primitive", "tpms_label": "📦 Schwarz Primitive (P)",
+            "mode": "sheet", "mode_label": "📜 Sheet (Ścianka powłokowa |f| ≤ tw)",
+            "wall_thickness": 0.18,
+            "nx": 2.0, "ny": 2.0, "nz": 2.0, "t": 0.0,
+        },
+        "Ultra-sztywny Hashin-Shtrikman (Diamond Sheet)": {
+            "tpms": "Diamond", "tpms_label": "💎 Schwarz Diamond (D)",
+            "mode": "sheet", "mode_label": "📜 Sheet (Ścianka powłokowa |f| ≤ tw)",
+            "wall_thickness": 0.22,
+            "nx": 2.0, "ny": 2.0, "nz": 2.0, "t": 0.0,
+        },
+        "Wysoka porowatość (t=-0.7)": {
+            "nx": 2.5, "ny": 2.5, "nz": 2.5, "t": -0.7,
+        },
+        "Gęsta struktura ściankowa (t=0.6)": {
+            "nx": 2.5, "ny": 2.5, "nz": 2.5, "t": 0.6,
+        },
+    }
+    cfg = preset_configs.get(preset_name)
+    if cfg:
+        if "tpms" in cfg:
+            st.session_state.selected_tpms = cfg["tpms"]
+            st.session_state.sidebar_tpms_choice = cfg["tpms_label"]
+        if "mode" in cfg:
+            st.session_state.selected_mode = cfg["mode"]
+            st.session_state.sidebar_mode_choice = cfg["mode_label"]
+        if "wall_thickness" in cfg:
+            st.session_state.wall_thickness = cfg["wall_thickness"]
+            st.session_state.sidebar_wall_thickness = cfg["wall_thickness"]
+        st.session_state.slider_nx = float(cfg["nx"])
+        st.session_state.slider_ny = float(cfg["ny"])
+        st.session_state.slider_nz = float(cfg["nz"])
+        st.session_state.slider_t = float(cfg["t"])
+
+
 def init_session_state():
     """Inicjalizacja modelu sieci i domyślnych danych w st.session_state."""
+    if "selected_tpms" not in st.session_state:
+        st.session_state.selected_tpms = "Gyroid"
+    if "sidebar_tpms_choice" not in st.session_state:
+        st.session_state.sidebar_tpms_choice = "🧊 Schoen Gyroid (G)"
+
+    if "selected_mode" not in st.session_state:
+        st.session_state.selected_mode = "network"
+    if "sidebar_mode_choice" not in st.session_state:
+        st.session_state.sidebar_mode_choice = "🧱 Network (Lity szkielet f ≤ t)"
+
+    if "wall_thickness" not in st.session_state:
+        st.session_state.wall_thickness = 0.20
+    if "sidebar_wall_thickness" not in st.session_state:
+        st.session_state.sidebar_wall_thickness = 0.20
+
+    if "slider_nx" not in st.session_state:
+        st.session_state.slider_nx = 2.0
+    if "slider_ny" not in st.session_state:
+        st.session_state.slider_ny = 2.0
+    if "slider_nz" not in st.session_state:
+        st.session_state.slider_nz = 2.0
+    if "slider_t" not in st.session_state:
+        st.session_state.slider_t = 0.0
+    if "preset_selector" not in st.session_state:
+        st.session_state.preset_selector = "Własna konfiguracja (Custom)"
+    if "gallery_opacity" not in st.session_state:
+        st.session_state.gallery_opacity = 0.85
+    if "gallery_show_edges" not in st.session_state:
+        st.session_state.gallery_show_edges = True
+    if "gallery_show_bbox" not in st.session_state:
+        st.session_state.gallery_show_bbox = True
+
     if "model" not in st.session_state:
         st.session_state.model = nm.StiffnessSurrogateModel(
             hidden_dims=[64, 128, 128, 64],
@@ -131,7 +347,7 @@ def init_session_state():
         )
 
     if "dataset_X" not in st.session_state or "dataset_y" not in st.session_state:
-        X_init, y_init = tg.generate_synthetic_dataset(num_samples=500, random_seed=42)
+        X_init, y_init = tg.generate_synthetic_dataset(num_samples=500, random_seed=42, tpms_type="gyroid")
         st.session_state.dataset_X = X_init
         st.session_state.dataset_y = y_init
 
@@ -167,9 +383,11 @@ init_session_state()
 st.markdown(
     """
     <div class="main-header">
-        <h1>🧊 Gyroid Metamaterial Stiffness NN Studio</h1>
-        <p>Zaawansowane modelowanie i wizualizacja relacji mikromechanicznych TPMS (Gyroid) 
-        oraz aproksymacja macierzy sztywności 6×6 (Voigt) z użyciem głębokich sieci neuronowych PyTorch.</p>
+        <h1>🧊 💎 📦 🎀 🕸️ 🔀 🏗️ TPMS & Metamaterial Studio</h1>
+        <p>Zaawansowane modelowanie i mikromechanika <b>7 kanonicznych struktur metamateriałowych</b>: 
+        powierzchnie minimalne TPMS (<b>Schoen Gyroid</b>, <b>Schwarz Diamond</b>, <b>Schwarz Primitive</b>, <b>Neovius C(P)</b>, <b>Schoen I-WP</b>), 
+        struktury kratowe (<b>Octet-Truss F-RD</b>) oraz auksetyczne (<b>Re-entrant Auxetic, ν < 0</b>) 
+        w morfologii <b>Network (Bryła)</b> i <b>Sheet (Ścianka)</b> z aproksymacją tensora sztywności 6×6 w PyTorch.</p>
     </div>
     """,
     unsafe_allow_html=True,
@@ -179,7 +397,81 @@ st.markdown(
 # Pasek boczny (Sidebar) - Sterowanie
 # ==========================================
 with st.sidebar:
-    st.header("⚙️ Parametry Geometryczne Gyroidu")
+    st.header("⚙️ Konfiguracja Metamateriału")
+    
+    tpms_options = [
+        "🧊 Schoen Gyroid (G)",
+        "💎 Schwarz Diamond (D)",
+        "📦 Schwarz Primitive (P)",
+        "🎀 Re-entrant Auxetic (ν < 0)",
+        "🕸️ Neovius (Schoen C(P))",
+        "🔀 Schoen I-WP (Asymetryczny)",
+        "🏗️ Octet-Truss (Schoen F-RD)",
+    ]
+    cur_tpms_choice = st.session_state.get("sidebar_tpms_choice", tpms_options[0])
+    default_idx = tpms_options.index(cur_tpms_choice) if cur_tpms_choice in tpms_options else 0
+
+    tpms_choice = st.radio(
+        "Wybór geometrii metamateriału:",
+        tpms_options,
+        index=default_idx,
+        key="sidebar_tpms_choice",
+    )
+    if "Diamond" in tpms_choice:
+        current_tpms = "diamond"
+        st.session_state.selected_tpms = "Diamond"
+    elif "Primitive" in tpms_choice:
+        current_tpms = "primitive"
+        st.session_state.selected_tpms = "Primitive"
+    elif "Auxetic" in tpms_choice:
+        current_tpms = "auxetic"
+        st.session_state.selected_tpms = "Auxetic"
+    elif "Neovius" in tpms_choice:
+        current_tpms = "neovius"
+        st.session_state.selected_tpms = "Neovius"
+    elif "I-WP" in tpms_choice:
+        current_tpms = "iwp"
+        st.session_state.selected_tpms = "I-WP"
+    elif "Octet" in tpms_choice:
+        current_tpms = "octet"
+        st.session_state.selected_tpms = "Octet"
+    else:
+        current_tpms = "gyroid"
+        st.session_state.selected_tpms = "Gyroid"
+
+    st.markdown("---")
+    st.header("🏗️ Morfologia Komórki")
+    mode_options = [
+        "🧱 Network (Lity szkielet f ≤ t)",
+        "📜 Sheet (Ścianka powłokowa |f| ≤ tw)",
+    ]
+    cur_mode_choice = st.session_state.get("sidebar_mode_choice", mode_options[0])
+    cur_mode_idx = mode_options.index(cur_mode_choice) if cur_mode_choice in mode_options else 0
+    mode_choice = st.radio(
+        "Tryb budowy komórki:",
+        mode_options,
+        index=cur_mode_idx,
+        key="sidebar_mode_choice",
+    )
+    current_mode = "sheet" if "Sheet" in mode_choice else "network"
+    st.session_state.selected_mode = current_mode
+
+    if current_mode == "sheet":
+        wall_thickness_val = st.slider(
+            "Grubość ścianki tw (Wall thickness):",
+            min_value=0.05,
+            max_value=0.45,
+            value=float(st.session_state.get("wall_thickness", 0.20)),
+            step=0.01,
+            key="sidebar_wall_thickness",
+        )
+        st.session_state.wall_thickness = wall_thickness_val
+        st.caption("💡 *W trybie Sheet komórka ma podwójną ściankę o wyższej sztywności (granica Hashina-Shtrikmana).*")
+    else:
+        wall_thickness_val = float(st.session_state.get("wall_thickness", 0.20))
+
+    st.markdown("---")
+    st.header("📐 Wymiary i Periodyczność")
 
     # Presety parametrów
     preset_choice = st.selectbox(
@@ -189,28 +481,23 @@ with st.sidebar:
             "Izotropowy standardowy (nx=2, ny=2, nz=2, t=0)",
             "Anizotropowy belkowy (nx=4.5, ny=1.5, nz=1.5, t=0.1)",
             "Płytowy / Warstwowy (nx=1.5, ny=1.5, nz=4.5, t=-0.2)",
+            "Ultra-sztywny Octet-Truss (Schoen F-RD, kratownica)",
+            "Wielokanałowy Neovius (Schoen C(P), 12 kanałów)",
+            "Asymetryczny labirynt I-WP (Schoen I-WP, 2 płyny)",
+            "Pochłaniacz energii (Auksetyk, nu < 0)",
+            "Wymiennik ciepła (Primitive Sheet, wysoki przepływ)",
+            "Ultra-sztywny Hashin-Shtrikman (Diamond Sheet)",
             "Wysoka porowatość (t=-0.7)",
             "Gęsta struktura ściankowa (t=0.6)",
         ],
+        key="preset_selector",
+        on_change=apply_preset,
     )
 
-    # Wartości domyślne na podstawie presetu
-    d_nx, d_ny, d_nz, d_t = 2.0, 2.0, 2.0, 0.0
-    if preset_choice == "Izotropowy standardowy (nx=2, ny=2, nz=2, t=0)":
-        d_nx, d_ny, d_nz, d_t = 2.0, 2.0, 2.0, 0.0
-    elif preset_choice == "Anizotropowy belkowy (nx=4.5, ny=1.5, nz=1.5, t=0.1)":
-        d_nx, d_ny, d_nz, d_t = 4.5, 1.5, 1.5, 0.1
-    elif preset_choice == "Płytowy / Warstwowy (nx=1.5, ny=1.5, nz=4.5, t=-0.2)":
-        d_nx, d_ny, d_nz, d_t = 1.5, 1.5, 4.5, -0.2
-    elif preset_choice == "Wysoka porowatość (t=-0.7)":
-        d_nx, d_ny, d_nz, d_t = 2.5, 2.5, 2.5, -0.7
-    elif preset_choice == "Gęsta struktura ściankowa (t=0.6)":
-        d_nx, d_ny, d_nz, d_t = 2.5, 2.5, 2.5, 0.6
-
-    nx = st.slider("Liczba komórek nx (Oś X):", min_value=1.0, max_value=5.0, value=float(d_nx), step=0.1)
-    ny = st.slider("Liczba komórek ny (Oś Y):", min_value=1.0, max_value=5.0, value=float(d_ny), step=0.1)
-    nz = st.slider("Liczba komórek nz (Oś Z):", min_value=1.0, max_value=5.0, value=float(d_nz), step=0.1)
-    t_val = st.slider("Parametr izopowierzchni t (Gęstość):", min_value=-1.0, max_value=1.0, value=float(d_t), step=0.05)
+    nx = st.slider("Liczba komórek nx (Oś X):", min_value=1.0, max_value=5.0, value=float(st.session_state.slider_nx), step=0.1, key="slider_nx")
+    ny = st.slider("Liczba komórek ny (Oś Y):", min_value=1.0, max_value=5.0, value=float(st.session_state.slider_ny), step=0.1, key="slider_ny")
+    nz = st.slider("Liczba komórek nz (Oś Z):", min_value=1.0, max_value=5.0, value=float(st.session_state.slider_nz), step=0.1, key="slider_nz")
+    t_val = st.slider("Parametr izopowierzchni t (Próg gęstości):", min_value=-1.0, max_value=1.0, value=float(st.session_state.slider_t), step=0.05, key="slider_t")
 
     st.markdown("---")
     st.header("🧠 Uczenie Sieci Neuronowej")
@@ -223,23 +510,37 @@ with st.sidebar:
     )
     noise_param = st.slider("Szum losowy danych (%):", min_value=0.0, max_value=5.0, value=1.5, step=0.5) / 100.0
 
-    train_btn = st.button("🚀 Trenuj Sieć Neuronową", use_container_width=True, type="primary")
+    train_btn = st.button("🚀 Trenuj Sieć dla Aktywnej Konfiguracji", width="stretch", type="primary")
 
     st.markdown("---")
-    mesh_res = st.select_slider("Rozdzielczość siatki 3D Gyroidu:", options=[24, 30, 36, 42], value=30)
+    mesh_res = st.select_slider("Rozdzielczość siatki 3D Isosurface:", options=[24, 30, 36, 42], value=30)
     
+    active_label_map = {
+        "gyroid": "Gyroid (Schoen G)",
+        "diamond": "Diamond (Schwarz D)",
+        "primitive": "Primitive (Schwarz P)",
+        "auxetic": "Auxetic (Re-entrant, ν < 0)",
+        "neovius": "Neovius (Schoen C(P))",
+        "iwp": "Schoen I-WP (Asymetryczny)",
+        "octet": "Octet-Truss (Schoen F-RD)",
+    }
     st.info(
+        f"**Aktywna struktura:** `{active_label_map[current_tpms]}`\n\n"
+        f"**Tryb morfologii:** `{'📜 Sheet' if current_mode == 'sheet' else '🧱 Network'}`\n\n"
         f"**Status modelu:** {'✅ Wytrenowany' if st.session_state.model.is_trained else '⏳ Oczekuje na trening'}\n\n"
         f"**Urządzenie PyTorch:** `{st.session_state.model.device}`"
     )
 
 # Obsługa przycisku treningu
 if train_btn:
-    with st.spinner("Generowanie nowych danych syntetycznych i trening sieci MLP..."):
+    with st.spinner(f"Generowanie danych syntetycznych ({active_label_map[current_tpms]}, {current_mode.upper()}) i trening sieci MLP..."):
         X_new, y_new = tg.generate_synthetic_dataset(
             num_samples=num_samples,
             random_seed=int(time.time()),
             noise_level=noise_param,
+            tpms_type=current_tpms,
+            mode=current_mode,
+            wall_thickness=wall_thickness_val,
         )
         st.session_state.dataset_X = X_new
         st.session_state.dataset_y = y_new
@@ -270,7 +571,13 @@ if train_btn:
 current_input = np.array([nx, ny, nz, t_val], dtype=np.float32)
 
 # Macierz wzorcowa (Ground Truth z syntetycznego homogenizatora)
-C_true = tg.synthetic_stiffness_matrix(nx, ny, nz, t_val, noise_level=0.0)
+C_true = tg.synthetic_stiffness_matrix(
+    nx, ny, nz, t_val,
+    noise_level=0.0,
+    tpms_type=current_tpms,
+    mode=current_mode,
+    wall_thickness=wall_thickness_val,
+)
 
 # Predykcja sieci neuronowej
 if st.session_state.model.is_trained:
@@ -285,7 +592,13 @@ max_error = float(np.max(C_diff))
 rel_error_pct = float(np.mean(C_diff / (np.abs(C_true) + 1e-6)) * 100.0)
 
 # Gęstość względna
-rho_calc = tg.compute_relative_density(nx, ny, nz, t_val, resolution=25)
+rho_calc = tg.compute_relative_density(
+    nx, ny, nz, t_val,
+    resolution=25,
+    tpms_type=current_tpms,
+    mode=current_mode,
+    wall_thickness=wall_thickness_val,
+)
 
 # ==========================================
 # Pasek kluczowych metryk (KPIs)
@@ -332,106 +645,446 @@ with col_m4:
         unsafe_allow_html=True,
     )
 with col_m5:
-    st.markdown(
-        f"""
-        <div class="metric-card">
-            <div class="metric-label">Średni Błąd Sieci (MAE)</div>
-            <div class="metric-value">{mae_error:.2f} <span style="font-size:0.9rem; color:#f87171;">GPa ({rel_error_pct:.1f}%)</span></div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    if current_tpms == "auxetic":
+        st.markdown(
+            f"""
+            <div class="metric-card">
+                <div class="metric-label">C12 (Poprzeczne ν < 0)</div>
+                <div class="metric-value">{C_true[0, 1]:.1f} <span style="font-size:0.9rem; color:#38bdf8;">GPa (Auksetyk!)</span></div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            f"""
+            <div class="metric-card">
+                <div class="metric-label">Średni Błąd Sieci (MAE)</div>
+                <div class="metric-value">{mae_error:.2f} <span style="font-size:0.9rem; color:#f87171;">GPa ({rel_error_pct:.1f}%)</span></div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
 # ==========================================
 # Zakładki Główne Dashboardu
 # ==========================================
 tab_3d_geom, tab_matrix, tab_young, tab_training, tab_dataset = st.tabs(
     [
-        "🧊 1. Wizualizacja 3D Gyroidu (TPMS)",
+        "🧊/💎/📦/🎀/🕸️/🔀/🏗️ 1. Morfologia & Modele 3D (7 Architektur)",
         "📊 2. Macierze Sztywności 6×6 (Porównanie)",
         "🌐 3. Kierunkowy Moduł Younga 3D (Anizotropia)",
         "📈 4. Diagnostyka Uczenia Sieci",
-        "💾 5. Zbiór Danych & Eksport/Import",
+        "💾 5. Zbiór Danych & Eksport 3D (STEP/IGES/STL)",
     ]
 )
 
 # ----------------------------------------------------
-# TAB 1: Wizualizacja 3D Struktury Gyroidu
+# TAB 1: Morfologia i Modele 3D: 7 Kanonicznych Architektur
 # ----------------------------------------------------
 with tab_3d_geom:
-    st.subheader("Trójwymiarowy Model Powierzchni TPMS Gyroidu")
-    st.markdown(
-        """
-        Równanie powierzchni:
-        $$f(x, y, z) = \\sin(k_x x)\\cos(k_y y) + \\sin(k_y y)\\cos(k_z z) + \\sin(k_z z)\\cos(k_x x) - t = 0$$
-        gdzie $k_i = 2\\pi n_i / L_i$. Powierzchnia dzieli przestrzeń na labiryntowe domeny komórkowe o zerowej średniej krzywiźnie.
-        """
-    )
+    st.subheader(f"Trójwymiarowy Model Metamateriału: 7 Kanonicznych Struktur ({'Ściankowy (Sheet)' if current_mode == 'sheet' else 'Szkieletowy (Network)'})")
 
-    col_iso_opt1, col_iso_opt2 = st.columns([1, 3])
-    with col_iso_opt1:
+    col_view_opt, col_color_opt = st.columns([2, 1])
+    with col_view_opt:
+        tpms_view_mode = st.radio(
+            "Wybierz widok geometrii:",
+            [
+                f"Aktywna struktura: {active_label_map[current_tpms]}",
+                "🧊 Schoen Gyroid (G)",
+                "💎 Schwarz Diamond (D)",
+                "📦 Schwarz Primitive (P)",
+                "🎀 Re-entrant Auxetic (ν < 0)",
+                "🕸️ Neovius (Schoen C(P))",
+                "🔀 Schoen I-WP (Asymetryczny)",
+                "🏗️ Octet-Truss (Schoen F-RD)",
+                "⚖️ Porównanie Wszystkich 7 Struktur (Galeria)",
+            ],
+            index=0,
+            horizontal=True,
+            key="tab1_view_mode",
+        )
+    with col_color_opt:
         color_scheme = st.selectbox(
-            "Paleta barw:",
+            "Paleta barw Isosurface:",
             ["Viridis", "Plasma", "Cividis", "Turbo", "Blues", "Magma"],
             index=0,
+            key="iso_color_scheme",
         )
-        opacity_val = st.slider("Przezroczystość powierzchni:", 0.3, 1.0, 0.95, 0.05)
-        show_caps = st.checkbox("Zamknij ściany komórki (Caps)", value=False)
+
+    # Obliczenie gęstości dla wszystkich 7 struktur
+    rho_gyroid = tg.compute_relative_density(nx, ny, nz, t_val, resolution=22, tpms_type="gyroid", mode=current_mode, wall_thickness=wall_thickness_val)
+    rho_diamond = tg.compute_relative_density(nx, ny, nz, t_val, resolution=22, tpms_type="diamond", mode=current_mode, wall_thickness=wall_thickness_val)
+    rho_primitive = tg.compute_relative_density(nx, ny, nz, t_val, resolution=22, tpms_type="primitive", mode=current_mode, wall_thickness=wall_thickness_val)
+    rho_auxetic = tg.compute_relative_density(nx, ny, nz, t_val, resolution=22, tpms_type="auxetic", mode=current_mode, wall_thickness=wall_thickness_val)
+    rho_neovius = tg.compute_relative_density(nx, ny, nz, t_val, resolution=22, tpms_type="neovius", mode=current_mode, wall_thickness=wall_thickness_val)
+    rho_iwp = tg.compute_relative_density(nx, ny, nz, t_val, resolution=22, tpms_type="iwp", mode=current_mode, wall_thickness=wall_thickness_val)
+    rho_octet = tg.compute_relative_density(nx, ny, nz, t_val, resolution=22, tpms_type="octet", mode=current_mode, wall_thickness=wall_thickness_val)
+
+    # 1. TRYB PORÓWNANIA OBOK SIEBIE (WSZYSTKIE 7 STRUKTUR)
+    if tpms_view_mode == "⚖️ Porównanie Wszystkich 7 Struktur (Galeria)":
+        st.markdown(
+            f"""
+            #### ⚖️ Pełne Zestawienie Topologii 7 Struktur Metamateriałowych (Tryb: **{current_mode.upper()}**)
+            Zestawienie właściwości topologicznych, symetrii krystalograficznych oraz zachowania mikromechanicznego wygenerowanych dla $[n_x, n_y, n_z] = [{nx:.1f}, {ny:.1f}, {nz:.1f}]$, $t={t_val:.2f}$ oraz $t_w={wall_thickness_val:.2f}$.
+            """
+        )
+
+        # Kontrolki wizualizacji dla widoku galerii (przezroczystość i krawędzie)
+        st.markdown("##### 🎛️ Opcje renderowania galerii (Przezroczystość i Krawędzie):")
+        col_gal_opt1, col_gal_opt2, col_gal_opt3 = st.columns([2, 1, 1])
+        with col_gal_opt1:
+            gallery_opacity = st.slider(
+                "Przezroczystość powierzchni (Opacity):",
+                min_value=0.10,
+                max_value=1.00,
+                value=float(st.session_state.get("gallery_opacity", 0.85)),
+                step=0.05,
+                key="gallery_opacity_slider",
+                help="Regulacja przezroczystości izopowierzchni we wszystkich 7 modelach w galerii.",
+            )
+            st.session_state.gallery_opacity = gallery_opacity
+        with col_gal_opt2:
+            gallery_show_edges = st.checkbox(
+                "Włącz krawędzie (Contours / Edges)",
+                value=bool(st.session_state.get("gallery_show_edges", True)),
+                key="gallery_show_edges_checkbox",
+                help="Włącza wyświetlanie linii konturowych i krawędzi na powierzchni modeli 3D.",
+            )
+            st.session_state.gallery_show_edges = gallery_show_edges
+        with col_gal_opt3:
+            gallery_show_bbox = st.checkbox(
+                "Krawędzie komórki (Bounding Box)",
+                value=bool(st.session_state.get("gallery_show_bbox", True)),
+                key="gallery_show_bbox_checkbox",
+                help="Wyświetla krawędzie sześcianu komórki elementarnej [0, 1]³.",
+            )
+            st.session_state.gallery_show_bbox = gallery_show_bbox
 
         st.markdown(
             f"""
-            <div class="formula-box">
-                <b>Aktualne parametry TPMS:</b><br>
-                • nx = <b>{nx:.2f}</b>, ny = <b>{ny:.2f}</b>, nz = <b>{nz:.2f}</b><br>
-                • Wartość progu t = <b>{t_val:.2f}</b><br>
-                • Gęstość względna ρ ≈ <b>{rho_calc:.3f}</b><br>
-                • Siatka 3D: <b>{mesh_res}³ = {mesh_res**3:,}</b> punktów
-            </div>
-            """,
-            unsafe_allow_html=True,
+            | Parametr / Cecha | 🧊 Schoen Gyroid (G) | 💎 Schwarz Diamond (D) | 📦 Schwarz Primitive (P) | 🎀 Re-entrant Auxetic (ν < 0) | 🕸️ Neovius (Schoen C(P)) | 🔀 Schoen I-WP | 🏗️ Octet-Truss (Schoen F-RD) |
+            |---|---|---|---|---|---|---|---|
+            | **Grupa krystalograficzna** | $Ia\\bar{{3}}d$ (nr 230) | $Pn\\bar{{3}}m$ (nr 224) | $Im\\bar{{3}}m$ (nr 229) | Re-entrant ($m\\bar{{3}}m$) | $Im\\bar{{3}}m$ (nr 229) | $Im\\bar{{3}}m$ (nr 229) | $Fm\\bar{{3}}m$ (nr 225) |
+            | **Współczynnik Poissona (ν)** | $\\sim +0.28$ | $\\sim +0.30$ | $\\sim +0.25$ | **$\\sim -0.22$ (UJEMNY)** | $\\sim +0.27$ | $\\sim +0.29$ | $\\sim +0.33$ |
+            | **Topologia sieci / kanałów** | 2 splecione labirynty chiralne | Tetraedryczne węzły $sp^3$ | 6 otwartych kanałów osiowych | Węzły wklęsłe (re-entrant) | 12 kanałów diagonalnych | 2 asymetryczne labirynty (I i WP) | Krystaliczna krata oktetowa FCC |
+            | **Gęstość względna (ρ)** | **{rho_gyroid * 100:.1f}%** | **{rho_diamond * 100:.1f}%** | **{rho_primitive * 100:.1f}%** | **{rho_auxetic * 100:.1f}%** | **{rho_neovius * 100:.1f}%** | **{rho_iwp * 100:.1f}%** | **{rho_octet * 100:.1f}%** |
+            | **Mechanizm odkształceń** | Zginanie ścianek ($m \\approx 1.85$) | Ściskanie węzłów ($m \\approx 1.76$) | Ortotropia osiowa ($m \\approx 1.95$) | Rozszerzanie poprzeczne | Ścinanie diagonalne ($m \\approx 1.80$) | Quasi-izotropowy ($m \\approx 1.74$) | **Rozciąganie prętów ($m \\approx 1.55$)** |
+            | **Zastosowania inżynierskie** | Wymienniki ciepła, implanty | Konstrukcje nośne, lotnictwo | Filtry cieczowe, katalizatory | Ochrona balistyczna, absorpcja | Radiatory wysokopowierzchniowe | Dwufazowe wymienniki, separatory | Ramy ultralekkie o maks. sztywności |
+            """
         )
 
-    with col_iso_opt2:
-        # Generowanie siatki gyroidu
-        X_grid, Y_grid, Z_grid, F_grid = get_cached_gyroid_grid(nx, ny, nz, t_val, resolution=mesh_res)
+        # Rząd 1: Gyroid i Diamond
+        col_c1, col_c2 = st.columns(2)
+        with col_c1:
+            st.markdown(f"##### 🧊 Schoen Gyroid ($Ia\\bar{{3}}d$) — ρ ≈ {rho_gyroid*100:.1f}%")
+            X_g, Y_g, Z_g, F_g = get_cached_gyroid_grid(nx, ny, nz, t_val, resolution=mesh_res, mode=current_mode, wall_thickness=wall_thickness_val)
+            fig_g = build_gallery_figure(X_g, Y_g, Z_g, F_g, "Blues", opacity=gallery_opacity, show_edges=gallery_show_edges, show_bbox=gallery_show_bbox)
+            st.plotly_chart(fig_g, width="stretch")
 
-        fig_iso = go.Figure(
-            data=go.Isosurface(
-                x=X_grid.flatten(),
-                y=Y_grid.flatten(),
-                z=Z_grid.flatten(),
-                value=F_grid.flatten(),
-                isomin=-0.08,
-                isomax=0.08,
-                surface_count=2,
-                colorscale=color_scheme,
-                opacity=opacity_val,
-                caps=dict(x_show=show_caps, y_show=show_caps, z_show=show_caps),
-                colorbar=dict(title="f(x,y,z)", thickness=15, len=0.7),
+        with col_c2:
+            st.markdown(f"##### 💎 Schwarz Diamond ($Pn\\bar{{3}}m$) — ρ ≈ {rho_diamond*100:.1f}%")
+            X_d, Y_d, Z_d, F_d = get_cached_diamond_grid(nx, ny, nz, t_val, resolution=mesh_res, mode=current_mode, wall_thickness=wall_thickness_val)
+            fig_d = build_gallery_figure(X_d, Y_d, Z_d, F_d, "Plasma", opacity=gallery_opacity, show_edges=gallery_show_edges, show_bbox=gallery_show_bbox)
+            st.plotly_chart(fig_d, width="stretch")
+
+        # Rząd 2: Primitive i Auxetic
+        col_c3, col_c4 = st.columns(2)
+        with col_c3:
+            st.markdown(f"##### 📦 Schwarz Primitive ($Im\\bar{{3}}m$) — ρ ≈ {rho_primitive*100:.1f}%")
+            X_p, Y_p, Z_p, F_p = get_cached_primitive_grid(nx, ny, nz, t_val, resolution=mesh_res, mode=current_mode, wall_thickness=wall_thickness_val)
+            fig_p = build_gallery_figure(X_p, Y_p, Z_p, F_p, "Cividis", opacity=gallery_opacity, show_edges=gallery_show_edges, show_bbox=gallery_show_bbox)
+            st.plotly_chart(fig_p, width="stretch")
+
+        with col_c4:
+            st.markdown(f"##### 🎀 Re-entrant Auxetic (ν < 0) — ρ ≈ {rho_auxetic*100:.1f}%")
+            X_a, Y_a, Z_a, F_a = get_cached_auxetic_grid(nx, ny, nz, t_val, resolution=mesh_res, mode=current_mode, wall_thickness=wall_thickness_val)
+            fig_a = build_gallery_figure(X_a, Y_a, Z_a, F_a, "Viridis", opacity=gallery_opacity, show_edges=gallery_show_edges, show_bbox=gallery_show_bbox)
+            st.plotly_chart(fig_a, width="stretch")
+
+        # Rząd 3: Neovius i Schoen I-WP
+        col_c5, col_c6 = st.columns(2)
+        with col_c5:
+            st.markdown(f"##### 🕸️ Neovius Schoen C(P) ($Im\\bar{{3}}m$) — ρ ≈ {rho_neovius*100:.1f}%")
+            X_n, Y_n, Z_n, F_n = get_cached_neovius_grid(nx, ny, nz, t_val, resolution=mesh_res, mode=current_mode, wall_thickness=wall_thickness_val)
+            fig_n = build_gallery_figure(X_n, Y_n, Z_n, F_n, "Turbo", opacity=gallery_opacity, show_edges=gallery_show_edges, show_bbox=gallery_show_bbox)
+            st.plotly_chart(fig_n, width="stretch")
+
+        with col_c6:
+            st.markdown(f"##### 🔀 Schoen I-WP ($Im\\bar{{3}}m$) — ρ ≈ {rho_iwp*100:.1f}%")
+            X_i, Y_i, Z_i, F_i = get_cached_iwp_grid(nx, ny, nz, t_val, resolution=mesh_res, mode=current_mode, wall_thickness=wall_thickness_val)
+            fig_i = build_gallery_figure(X_i, Y_i, Z_i, F_i, "Magma", opacity=gallery_opacity, show_edges=gallery_show_edges, show_bbox=gallery_show_bbox)
+            st.plotly_chart(fig_i, width="stretch")
+
+        # Rząd 4: Octet-Truss (Schoen F-RD)
+        col_c7, col_c8 = st.columns([1, 1])
+        with col_c7:
+            st.markdown(f"##### 🏗️ Octet-Truss Schoen F-RD ($Fm\\bar{{3}}m$) — ρ ≈ {rho_octet*100:.1f}%")
+            X_o, Y_o, Z_o, F_o = get_cached_octet_grid(nx, ny, nz, t_val, resolution=mesh_res, mode=current_mode, wall_thickness=wall_thickness_val)
+            fig_o = build_gallery_figure(X_o, Y_o, Z_o, F_o, "Plasma", opacity=gallery_opacity, show_edges=gallery_show_edges, show_bbox=gallery_show_bbox)
+            st.plotly_chart(fig_o, width="stretch")
+        with col_c8:
+            st.markdown(
+                r"""
+                <div class="formula-box" style="margin-top: 2rem;">
+                    <h4>🚀 Porównanie Efektywności Strukturalnej</h4>
+                    <p><b>1. Mechanizm zginania (Bending-dominated):</b> Schoen Gyroid, Primitive, Neovius wykazują skalowanie sztywności $E \propto \rho^m$ z wykładnikiem $m \approx 1.8-2.0$. Idealne do absorpcji energii i łagodnego zgniatania.</p>
+                    <p><b>2. Mechanizm rozciągania (Stretching-dominated):</b> Octet-Truss charakteryzuje się niemal liniowym skalowaniem $E \propto \rho^{1.1-1.5}$. Przy danej masie oferuje najwyższą sztywność konstrukcyjną w osiach głównych.</p>
+                    <p><b>3. Wpływ morfologii Sheet vs Network:</b> Wersje powłokowe (Sheet) przesuwają mechanikę w stronę granicy Hashina-Shtrikmana, podwajając sztywność w stosunku do Network o tej samej gęstości.</p>
+                </div>
+                """,
+                unsafe_allow_html=True,
             )
-        )
 
-        fig_iso.update_layout(
-            scene=dict(
-                xaxis=dict(title="X [Lx]", nticks=5),
-                yaxis=dict(title="Y [Ly]", nticks=5),
-                zaxis=dict(title="Z [Lz]", nticks=5),
-                camera=dict(eye=dict(x=1.6, y=1.6, z=1.4)),
-                aspectmode="cube",
-            ),
-            margin=dict(l=0, r=0, b=0, t=10),
-            height=600,
+    # 2. TRYB POJEDYNCZEJ STRUKTURY
+    else:
+        if "Diamond" in tpms_view_mode:
+            chosen_single = "diamond"
+        elif "Primitive" in tpms_view_mode:
+            chosen_single = "primitive"
+        elif "Auxetic" in tpms_view_mode:
+            chosen_single = "auxetic"
+        elif "Neovius" in tpms_view_mode:
+            chosen_single = "neovius"
+        elif "I-WP" in tpms_view_mode:
+            chosen_single = "iwp"
+        elif "Octet" in tpms_view_mode:
+            chosen_single = "octet"
+        elif "Gyroid" in tpms_view_mode:
+            chosen_single = "gyroid"
+        else:
+            chosen_single = current_tpms
+
+        if chosen_single == "diamond":
+            st.markdown(
+                """
+                **Struktura: 💎 Schwarz Diamond (D-surface)**  
+                $$f_D(x, y, z) = \\sin(k_x x)\\sin(k_y y)\\sin(k_z z) + \\sin(k_x x)\\cos(k_y y)\\cos(k_z z) + \\cos(k_x x)\\sin(k_y y)\\cos(k_z z) + \\cos(k_x x)\\cos(k_y y)\\sin(k_z z) - t = 0$$
+                Należy do grupy krystalograficznej $Pn\\bar{3}m$. Charakteryzuje się 4-ramiennymi węzłami tetraedrycznymi o bardzo wysokiej sztywności na ściskanie osiowe i ścinanie.
+                """
+            )
+            active_rho = rho_diamond
+        elif chosen_single == "primitive":
+            st.markdown(
+                """
+                **Struktura: 📦 Schwarz Primitive (P-surface)**  
+                $$f_P(x, y, z) = \\cos(k_x x) + \\cos(k_y y) + \\cos(k_z z) - t = 0$$
+                Dopełnia tzw. *Wielką Trójkę* TPMS. Należy do grupy $Im\\bar{3}m$. Tworzy prostą, otwartą sieć kanałów prostopadłych o najniższych oporach przepływu, idealną do wymienników ciepła i membran.
+                """
+            )
+            active_rho = rho_primitive
+        elif chosen_single == "auxetic":
+            st.markdown(
+                """
+                **Struktura: 🎀 Re-entrant Auxetic (Auksetyk 3D, ν < 0)**  
+                $$f_{aux}(x, y, z) = \\cos(k_x x)\\cos(k_y y)\\cos(k_z z) - c\\cdot(\\cos(2k_x x) + \\cos(2k_y y) + \\cos(2k_z z)) - t = 0$$
+                Metamateriał o **ujemnym współczynniku Poissona ($\nu < 0$)**. Wklęsłe krawędzie komórki rozprostowują się na zewnątrz przy rozciąganiu, dając niespotykane pochłanianie energii i odporność na pękanie.
+                """
+            )
+            active_rho = rho_auxetic
+        elif chosen_single == "neovius":
+            st.markdown(
+                r"""
+                **Struktura: 🕸️ Neovius (Schoen C(P) surface)**  
+                $$f_N(x, y, z) = \frac{1}{3}\left[3(\cos(k_x x) + \cos(k_y y) + \cos(k_z z)) + 4\cos(k_x x)\cos(k_y y)\cos(k_z z)\right] - t = 0$$
+                Powierzchnia minimalna o grupie symetrii $Im\bar{3}m$. Posiada 12 kanałów diagonalnych przecinających węzły sześcianu, oferując znakomitą sztywność na ścinanie ($\gamma_{shear} \approx 0.44$) oraz bardzo dużą powierzchnię wymiany masy i ciepła.
+                """
+            )
+            active_rho = rho_neovius
+        elif chosen_single == "iwp":
+            st.markdown(
+                """
+                **Struktura: 🔀 Schoen I-WP (I-Wrapped Package)**  
+                $$f_{IWP}(x, y, z) = 2(\\cos(k_x x)\\cos(k_y y) + \\cos(k_y y)\\cos(k_z z) + \\cos(k_z z)\\cos(k_x x)) - (\\cos(2k_x x) + \\cos(2k_y y) + \\cos(2k_z z)) - t = 0$$
+                Powierzchnia minimalna o grupie $Im\\bar{3}m$ dzieląca przestrzeń na **dwa asymetryczne labirynty** (sieć I oraz sieć WP). Charakteryzuje się wysoką quasi-izotropią mechaniczną ($\alpha \\approx 1.12$) i znakomitą wydajnością w wymiennikach dwufazowych.
+                """
+            )
+            active_rho = rho_iwp
+        elif chosen_single == "octet":
+            st.markdown(
+                """
+                **Struktura: 🏗️ Octet-Truss (Schoen F-RD / Krata Oktetowa)**  
+                $$f_{octet}(x, y, z) = 4\\cos(k_x x)\\cos(k_y y)\\cos(k_z z) - (\\cos(2k_x x)\\cos(2k_y y) + \\cos(2k_y y)\\cos(2k_z z) + \\cos(2k_z z)\\cos(2k_x x)) - t = 0$$
+                Gładka powierzchnia Schoen F-RD odzwierciedlająca **kratownicę oktetową FCC** (Deshpande-Fleck). Posiada mechanizm odkształceń zdominowany przez rozciąganie prętów (**stretching-dominated**, $m \\approx 1.55$ w Network, $m \\approx 1.10$ w Sheet), oferując najwyższy stosunek modułu Younga do gęstości.
+                """
+            )
+            active_rho = rho_octet
+        else:
+            st.markdown(
+                """
+                **Struktura: 🧊 Schoen Gyroid (G-surface)**  
+                $$f_G(x, y, z) = \\sin(k_x x)\\cos(k_y y) + \\sin(k_y y)\\cos(k_z z) + \\sin(k_z z)\\cos(k_x x) - t = 0$$
+                Powierzchnia należy do grupy $Ia\\bar{3}d$. Jest strukturą chiralną o zerowej średniej krzywiźnie ($H=0$), tworzącą dwa splecione bezkontaktowe labirynty o doskonałej ciągłości naprężeń.
+                """
+            )
+            active_rho = rho_gyroid
+
+        col_iso_opt1, col_iso_opt2 = st.columns([1, 3])
+        with col_iso_opt1:
+            opacity_val = st.slider("Przezroczystość powierzchni:", 0.10, 1.00, 0.95, 0.05, key="iso_opacity_slider")
+            show_caps = st.checkbox("Zamknij ściany komórki (Caps)", value=False, key="iso_caps_check")
+            show_edges_single = st.checkbox("Włącz krawędzie (Contours / Edges)", value=False, key="iso_edges_check", help="Włącza linie konturowe i krawędzie powierzchni.")
+            show_bbox_single = st.checkbox("Ramka komórki (Bounding Box)", value=False, key="iso_bbox_check", help="Wyświetla krawędzie sześcianu komórki elementarnej [0, 1]³.")
+
+            st.markdown(
+                f"""
+                <div class="formula-box">
+                    <b>Parametry komórki:</b><br>
+                    • Struktura: <b>{active_label_map[chosen_single]}</b><br>
+                    • Morfologia: <b>{'📜 Sheet (Ścianka)' if current_mode == 'sheet' else '🧱 Network (Bryła)'}</b><br>
+                    • Periodyczność: nx=<b>{nx:.2f}</b>, ny=<b>{ny:.2f}</b>, nz=<b>{nz:.2f}</b><br>
+                    • Wartość progu t = <b>{t_val:.2f}</b><br>
+                    • Gęstość względna ρ ≈ <b>{active_rho:.3f} ({active_rho*100:.1f}%)</b><br>
+                    • Rozdzielczość 3D: <b>{mesh_res}³ = {mesh_res**3:,}</b> punktów
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+            # Szybki przełącznik aktywnej struktury w dashboardzie
+            if chosen_single != current_tpms:
+                label_target_map = {
+                    "diamond": ("Diamond", "💎 Schwarz Diamond (D)"),
+                    "primitive": ("Primitive", "📦 Schwarz Primitive (P)"),
+                    "auxetic": ("Auxetic", "🎀 Re-entrant Auxetic (ν < 0)"),
+                    "neovius": ("Neovius", "🕸️ Neovius (Schoen C(P))"),
+                    "iwp": ("I-WP", "🔀 Schoen I-WP (Asymetryczny)"),
+                    "octet": ("Octet", "🏗️ Octet-Truss (Schoen F-RD)"),
+                    "gyroid": ("Gyroid", "🧊 Schoen Gyroid (G)"),
+                }
+                target_label, target_radio = label_target_map.get(chosen_single, ("Gyroid", "🧊 Schoen Gyroid (G)"))
+                if st.button(f"Ustaw {target_label} jako aktywny model obliczeniowy", type="primary", width="stretch", key=f"btn_set_active_{chosen_single}"):
+                    st.session_state.selected_tpms = target_label
+                    st.session_state.sidebar_tpms_choice = target_radio
+                    st.session_state.preset_selector = "Własna konfiguracja (Custom)"
+                    st.rerun()
+
+        with col_iso_opt2:
+            X_grid, Y_grid, Z_grid, F_grid = get_cached_tpms_grid(
+                chosen_single, nx, ny, nz, t_val,
+                resolution=mesh_res,
+                mode=current_mode,
+                wall_thickness=wall_thickness_val,
+            )
+
+            contour_cfg_single = dict(show=True, color="#0f172a", width=3) if show_edges_single else dict(show=False)
+            fig_iso = go.Figure(
+                data=go.Isosurface(
+                    x=X_grid.flatten(),
+                    y=Y_grid.flatten(),
+                    z=Z_grid.flatten(),
+                    value=F_grid.flatten(),
+                    isomin=-0.08,
+                    isomax=0.08,
+                    surface_count=2,
+                    colorscale=color_scheme,
+                    opacity=opacity_val,
+                    caps=dict(x_show=show_caps, y_show=show_caps, z_show=show_caps),
+                    contour=contour_cfg_single,
+                    colorbar=dict(title="f(x,y,z)", thickness=15, len=0.7),
+                )
+            )
+            if show_bbox_single:
+                fig_iso.add_trace(get_bounding_box_trace(Lx=1.0, Ly=1.0, Lz=1.0, color="#475569", width=2.5))
+
+            fig_iso.update_layout(
+                scene=dict(
+                    xaxis=dict(title="X [Lx]", nticks=5),
+                    yaxis=dict(title="Y [Ly]", nticks=5),
+                    zaxis=dict(title="Z [Lz]", nticks=5),
+                    camera=dict(eye=dict(x=1.6, y=1.6, z=1.4)),
+                    aspectmode="cube",
+                ),
+                margin=dict(l=0, r=0, b=0, t=10),
+                height=600,
+            )
+            st.plotly_chart(fig_iso, width="stretch")
+
+    # Sekcja Szybkiego Eksportu 3D
+    with st.expander("📦 Szybki Eksport Aktywnego Modelu 3D (STEP / IGES / STL / OBJ)", expanded=False):
+        chosen_export_tpms = chosen_single if ('chosen_single' in locals() and not tpms_view_mode.startswith("⚖️")) else current_tpms
+        st.markdown(
+            f"Pobierz wygenerowaną geometrię **{active_label_map[chosen_export_tpms]}** w trybie **{current_mode.upper()}** "
+            f"w formatach CAD (STEP, IGES) oraz siatkach 3D (STL, OBJ) dla parametrów $n=[{nx:.1f}, {ny:.1f}, {nz:.1f}], t={t_val:.2f}$."
         )
-        st.plotly_chart(fig_iso, use_container_width=True)
+        col_qe1, col_qe2, col_qe3, col_qe4 = st.columns(4)
+
+        with st.spinner("Przygotowywanie siatki eksportowej..."):
+            quick_mesh = exp3d.generate_tpms_mesh(
+                tpms_type=chosen_export_tpms,
+                nx=nx,
+                ny=ny,
+                nz=nz,
+                t=t_val,
+                resolution=18,
+                size_x_mm=25.0,
+                size_y_mm=25.0,
+                size_z_mm=25.0,
+                mode=current_mode,
+                wall_thickness=wall_thickness_val,
+            )
+
+        with col_qe1:
+            stl_bytes = exp3d.export_to_stl(quick_mesh, binary=True)
+            st.download_button(
+                label="📥 Pobierz STL (Druk 3D)",
+                data=stl_bytes,
+                file_name=f"{chosen_export_tpms}_{current_mode}_model.stl",
+                mime="application/sla",
+                width="stretch",
+            )
+        with col_qe2:
+            if exp3d.OCP_AVAILABLE:
+                step_bytes = exp3d.export_to_step(quick_mesh)
+                st.download_button(
+                    label="📥 Pobierz STEP (CAD ISO)",
+                    data=step_bytes,
+                    file_name=f"{chosen_export_tpms}_{current_mode}_model.step",
+                    mime="application/step",
+                    width="stretch",
+                )
+            else:
+                st.info("Brak OCP dla STEP")
+        with col_qe3:
+            if exp3d.OCP_AVAILABLE:
+                iges_bytes = exp3d.export_to_iges(quick_mesh)
+                st.download_button(
+                    label="📥 Pobierz IGES (CAD ANSI)",
+                    data=iges_bytes,
+                    file_name=f"{chosen_export_tpms}_{current_mode}_model.iges",
+                    mime="application/iges",
+                    width="stretch",
+                )
+            else:
+                st.info("Brak OCP dla IGES")
+        with col_qe4:
+            obj_bytes = exp3d.export_to_obj(quick_mesh)
+            st.download_button(
+                label="📥 Pobierz OBJ (Siatka 3D)",
+                data=obj_bytes,
+                file_name=f"{chosen_export_tpms}_{current_mode}_model.obj",
+                mime="text/plain",
+                width="stretch",
+            )
 
 # ----------------------------------------------------
 # TAB 2: Macierze Sztywności 6x6 (Heatmaps)
 # ----------------------------------------------------
 with tab_matrix:
-    st.subheader("Zestawienie Macierzy Sztywności 6×6 w Notacji Voigta (w GPa)")
+    st.subheader(f"Zestawienie Macierzy Sztywności 6×6 w Notacji Voigta ({active_label_map[current_tpms]}, {current_mode.upper()}) [w GPa]")
     st.markdown(
-        "Porównanie rzeczywistej ortotropowej macierzy sztywności ($C_{true}$), predykcji sieci neuronowej ($C_{pred}$) oraz bezwzględnej macierzy różnic $|C_{true} - C_{pred}|$."
+        f"Porównanie rzeczywistej ortotropowej macierzy sztywności ($C_{{true}}$) dla struktury **{active_label_map[current_tpms]}** w trybie **{current_mode.upper()}**, predykcji sieci neuronowej ($C_{{pred}}$) oraz bezwzględnej macierzy różnic $|C_{{true}} - C_{{pred}}|$."
     )
+    if current_tpms == "auxetic":
+        st.info("🎀 **Zjawisko Auksetyczne (Ujemny Współczynnik Poissona ν < 0):** W macierzy sztywności elementy sprzężenia poprzecznego $C_{12}, C_{13}, C_{23} < 0$, co odpowiada dodatnim składowym macierzy podatności $S_{12} > 0$. Materiał przy rozciąganiu w jednym kierunku rozszerza się poprzecznie (brak przewężenia).")
+    elif current_tpms == "octet":
+        st.info("🏗️ **Kratownica Oktetowa (Stretching-Dominated FCC):** Odkształcenia osiowe prętów sprawiają, że moduł Younga $E$ i sztywności diagonalne $C_{11}, C_{22}, C_{33}$ skalują się niemal liniowo z gęstością względną ($m \\approx 1.55$ w Network, $m \\approx 1.10$ w Sheet), dając najwyższą sprawność sztywnościową.")
+    elif current_tpms == "neovius":
+        st.info("🕸️ **Neovius Schoen C(P) (Podwyższone Ścinanie):** 12 kanałów diagonalnych w komórce elementarnej przenosi znaczące składowe ścinające ($C_{44}, C_{55}, C_{66}$), dając ponadprzeciętną sztywność postaciową w porównaniu z klasycznymi strukturami TPMS.")
+    elif current_tpms == "iwp":
+        st.info("🔀 **Schoen I-WP (Podwójny Labirynt Asymetryczny):** Zbalansowana odpowiedź sprężysta w przestrzeni 3D z niskim wskaźnikiem anizotropii Zenera ($Z \\approx 1.12$), gwarantująca stabilną nośność wieloosiową.")
+    if current_mode == "sheet":
+        st.success("📜 **Tryb Powłokowy (Sheet TPMS — Granica Hashina-Shtrikmana):** Ścianki komórki pracują w stanie membranowym (stretching-dominated, $m \\approx 1.20$), zapewniając prawie 2-krotnie wyższy moduł Younga niż komórki bryłowe (Network) o zbliżonej masie.")
 
     labels = ["ε₁₁ (xx)", "ε₂₂ (yy)", "ε₃₃ (zz)", "γ₂₃ (yz)", "γ₁₃ (xz)", "γ₁₂ (xy)"]
     labels_row = ["σ₁₁ (xx)", "σ₂₂ (yy)", "σ₃₃ (zz)", "τ₂₃ (yz)", "τ₁₃ (xz)", "τ₁₂ (xy)"]
@@ -521,7 +1174,7 @@ with tab_matrix:
         yaxis3=dict(autorange="reversed"),
     )
 
-    st.plotly_chart(fig_matrices, use_container_width=True)
+    st.plotly_chart(fig_matrices, width="stretch")
 
     # Tabela analityczna wartości głównych
     col_t1, col_t2 = st.columns(2)
@@ -540,7 +1193,7 @@ with tab_matrix:
                 ],
             }
         )
-        st.dataframe(diag_df.style.format({"Ground Truth [GPa]": "{:.2f}", "Predykcja NN [GPa]": "{:.2f}", "Błąd Bezwzględny [GPa]": "{:.2f}", "Błąd Względny [%]": "{:.2f}%"}), use_container_width=True)
+        st.dataframe(diag_df.style.format({"Ground Truth [GPa]": "{:.2f}", "Predykcja NN [GPa]": "{:.2f}", "Błąd Bezwzględny [GPa]": "{:.2f}", "Błąd Względny [%]": "{:.2f}%"}), width="stretch")
 
     with col_t2:
         st.markdown("#### ✂️ Porównanie Składowych Ścinania")
@@ -557,13 +1210,13 @@ with tab_matrix:
                 ],
             }
         )
-        st.dataframe(shear_df.style.format({"Ground Truth [GPa]": "{:.2f}", "Predykcja NN [GPa]": "{:.2f}", "Błąd Bezwzględny [GPa]": "{:.2f}", "Błąd Względny [%]": "{:.2f}%"}), use_container_width=True)
+        st.dataframe(shear_df.style.format({"Ground Truth [GPa]": "{:.2f}", "Predykcja NN [GPa]": "{:.2f}", "Błąd Bezwzględny [GPa]": "{:.2f}", "Błąd Względny [%]": "{:.2f}%"}), width="stretch")
 
 # ----------------------------------------------------
 # TAB 3: Kierunkowy Moduł Younga 3D (Anizotropia)
 # ----------------------------------------------------
 with tab_young:
-    st.subheader("Trójwymiarowy Wykres Polarny Modułu Younga E(u) (Anizotropia Sprężysta)")
+    st.subheader(f"Trójwymiarowy Wykres Polarny Modułu Younga E(u) ({active_label_map[current_tpms]}, {current_mode.upper()})")
     st.markdown(
         """
         Dla dowolnego wektora kierunkowego $\\mathbf{u} = [l, m, n]^T$, kierunkowy moduł Younga wynika z tensora podatności czwartego rzędu:
@@ -631,7 +1284,7 @@ with tab_young:
             margin=dict(l=0, r=0, b=0, t=40),
             height=600,
         )
-        st.plotly_chart(fig_young, use_container_width=True)
+        st.plotly_chart(fig_young, width="stretch")
 
 # ----------------------------------------------------
 # TAB 4: Diagnostyka Uczenia Sieci Neuronowej
@@ -674,7 +1327,7 @@ with tab_training:
                 legend=dict(x=0.65, y=0.95),
                 height=420,
             )
-            st.plotly_chart(fig_loss, use_container_width=True)
+            st.plotly_chart(fig_loss, width="stretch")
 
         with col_t_plot2:
             fig_r2 = go.Figure()
@@ -697,7 +1350,7 @@ with tab_training:
                 legend=dict(x=0.65, y=0.15),
                 height=420,
             )
-            st.plotly_chart(fig_r2, use_container_width=True)
+            st.plotly_chart(fig_r2, width="stretch")
 
         # Architektura modelu
         st.markdown("#### 📐 Szczegóły Architektury Sieci MLP")
@@ -749,7 +1402,7 @@ with tab_dataset:
         # Tworzenie czytelnej ramki DataFrame
         cols_names = ["nx", "ny", "nz", "t"] + [f"C_tri_{i+1}" for i in range(21)]
         df_preview = pd.DataFrame(np.hstack([X_data, y_data]), columns=cols_names)
-        st.dataframe(df_preview.head(10), use_container_width=True)
+        st.dataframe(df_preview.head(10), width="stretch")
 
         # Eksport do CSV
         csv_buffer = io.StringIO()
@@ -757,7 +1410,7 @@ with tab_dataset:
         st.download_button(
             label="📥 Pobierz zbiór danych jako CSV",
             data=csv_buffer.getvalue(),
-            file_name="gyroid_stiffness_dataset.csv",
+            file_name=f"{current_tpms}_stiffness_dataset.csv",
             mime="text/csv",
         )
 
@@ -767,7 +1420,7 @@ with tab_dataset:
         st.download_button(
             label="📥 Pobierz zbiór danych jako NPZ",
             data=npz_buffer.getvalue(),
-            file_name="gyroid_stiffness_dataset.npz",
+            file_name=f"{current_tpms}_stiffness_dataset.npz",
             mime="application/octet-stream",
         )
 
@@ -813,6 +1466,189 @@ with tab_dataset:
                 if st.button("Wczytaj wagi z pliku .pth"):
                     st.session_state.model.load_checkpoint("gyroid_nn_checkpoint.pth")
                     st.success("Wczytano model z pliku!")
+
+    # ========================================================
+    # Sekcja Eksportu Modeli 3D (CAD: STEP, IGES, STL, OBJ, PLY)
+    # ========================================================
+    st.markdown("---")
+    st.subheader("📐 Generator i Eksport Modeli 3D (CAD & Additive Manufacturing)")
+    st.markdown(
+        """
+        Generuj i pobieraj trójwymiarowe modele struktur TPMS i metamateriałów auksetycznych w formatach inżynierskich:
+        - **STEP (`.step` / `.stp`)**: Standard ISO 10303 dla systemów CAD (SolidWorks, Autodesk Inventor, Fusion 360, CATIA, Siemens NX, FreeCAD).
+        - **IGES (`.iges` / `.igs`)**: Klasyczny standard ANSI Y14.26M geometrii powierzchniowej.
+        - **STL (`.stl`)**: Standard triangulacji dla druku 3D (Slicery: PrusaSlicer, Bambu Studio, Cura, OrcaSlicer).
+        - **OBJ (`.obj`) / PLY (`.ply`)**: Otwarte formaty siatek poligonowych dla grafiki i inżynierii odwrotnej.
+        """
+    )
+
+    cad_col1, cad_col2 = st.columns([1, 1])
+
+    with cad_col1:
+        st.markdown("##### ⚙️ Parametry Geometryczne Modelu 3D")
+        export_tpms_type = st.radio(
+            "Struktura metamateriału do wyeksportowania:",
+            [
+                "🧊 Schoen Gyroid (G)",
+                "💎 Schwarz Diamond (D)",
+                "📦 Schwarz Primitive (P)",
+                "🎀 Re-entrant Auxetic (ν < 0)",
+                "🕸️ Neovius (Schoen C(P))",
+                "🔀 Schoen I-WP (Asymetryczny)",
+                "🏗️ Octet-Truss (Schoen F-RD)",
+            ],
+            index=default_idx,
+            horizontal=True,
+            key="cad_export_tpms_type_sel",
+        )
+        if "Diamond" in export_tpms_type:
+            selected_export_type = "diamond"
+        elif "Primitive" in export_tpms_type:
+            selected_export_type = "primitive"
+        elif "Auxetic" in export_tpms_type:
+            selected_export_type = "auxetic"
+        elif "Neovius" in export_tpms_type:
+            selected_export_type = "neovius"
+        elif "I-WP" in export_tpms_type:
+            selected_export_type = "iwp"
+        elif "Octet" in export_tpms_type:
+            selected_export_type = "octet"
+        else:
+            selected_export_type = "gyroid"
+
+        cad_mode_choice = st.radio(
+            "Morfologia eksportu:",
+            ["🧱 Network (Lity szkielet)", "📜 Sheet (Ścianka powłokowa)"],
+            index=0 if current_mode == "network" else 1,
+            horizontal=True,
+            key="cad_export_mode_sel",
+        )
+        selected_export_mode = "sheet" if "Sheet" in cad_mode_choice else "network"
+
+        if selected_export_mode == "sheet":
+            cad_tw = st.slider("Grubość ścianki tw [0.05 - 0.45]:", 0.05, 0.45, float(wall_thickness_val), 0.01, key="cad_tw_slider")
+        else:
+            cad_tw = 0.20
+
+        export_format = st.selectbox(
+            "Format pliku docelowego:",
+            [
+                "STEP (.step) — Model CAD (ISO 10303 Faceted B-Rep)",
+                "IGES (.iges) — Powierzchnia CAD (ANSI Y14.26M)",
+                "STL (.stl) — Siatka do Druku 3D (Binarny)",
+                "OBJ (.obj) — Siatka Wavefront",
+                "PLY (.ply) — Format Polygon Stanford",
+            ],
+            index=0,
+            key="cad_export_fmt_select",
+        )
+
+        mesh_density_choice = st.select_slider(
+            "Dokładność / Rozdzielczość próbkowania siatki:",
+            options=["Szybka / CAD (18³)", "Standardowa (22³)", "Wysoka / Druk 3D (26³)", "Bardzo wysoka (30³)"],
+            value="Standardowa (22³)",
+            key="cad_export_mesh_res",
+        )
+        res_map = {"Szybka / CAD (18³)": 18, "Standardowa (22³)": 22, "Wysoka / Druk 3D (26³)": 26, "Bardzo wysoka (30³)": 30}
+        chosen_res = res_map[mesh_density_choice]
+
+        dim_col1, dim_col2, dim_col3 = st.columns(3)
+        with dim_col1:
+            size_x = st.number_input("Wymiar X [mm]:", min_value=5.0, max_value=200.0, value=25.0, step=5.0, key="cad_size_x")
+        with dim_col2:
+            size_y = st.number_input("Wymiar Y [mm]:", min_value=5.0, max_value=200.0, value=25.0, step=5.0, key="cad_size_y")
+        with dim_col3:
+            size_z = st.number_input("Wymiar Z [mm]:", min_value=5.0, max_value=200.0, value=25.0, step=5.0, key="cad_size_z")
+
+    with cad_col2:
+        st.markdown("##### 🛠️ Generowanie i Pobieranie Pliku")
+        st.markdown(
+            f"""
+            <div class="formula-box">
+                <b>Parametry eksportowanego bloku:</b><br>
+                • Struktura: <b>{active_label_map[selected_export_type]}</b><br>
+                • Morfologia: <b>{'📜 Sheet (Ścianka)' if selected_export_mode == 'sheet' else '🧱 Network (Bryła)'}</b><br>
+                • Liczba komórek: <b>nx={nx:.2f}, ny={ny:.2f}, nz={nz:.2f}</b><br>
+                • Wartość progu t: <b>{t_val:.2f}</b>{' (tw=' + str(round(cad_tw, 2)) + ')' if selected_export_mode == 'sheet' else ''}<br>
+                • Wymiary gabarytowe: <b>{size_x:.1f} × {size_y:.1f} × {size_z:.1f} mm</b><br>
+                • Rozdzielczość siatki: <b>{chosen_res}³ = {chosen_res**3:,}</b> wokseli
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        gen_cad_btn = st.button("🚀 Wygeneruj i Przygotuj Model 3D", type="primary", width="stretch", key="cad_gen_button")
+
+        if gen_cad_btn:
+            with st.spinner("Przetwarzanie geometrii metamateriału algorytmem Marching Cubes oraz konwersja do formatu CAD..."):
+                try:
+                    mesh_3d = exp3d.generate_tpms_mesh(
+                        tpms_type=selected_export_type,
+                        nx=nx,
+                        ny=ny,
+                        nz=nz,
+                        t=t_val,
+                        resolution=chosen_res,
+                        size_x_mm=float(size_x),
+                        size_y_mm=float(size_y),
+                        size_z_mm=float(size_z),
+                        mode=selected_export_mode,
+                        wall_thickness=cad_tw,
+                    )
+
+                    num_v = len(mesh_3d.vertices)
+                    num_f = len(mesh_3d.faces)
+
+                    if "STEP" in export_format:
+                        file_bytes = exp3d.export_to_step(mesh_3d)
+                        ext = "step"
+                        mime_type = "application/step"
+                    elif "IGES" in export_format:
+                        file_bytes = exp3d.export_to_iges(mesh_3d)
+                        ext = "iges"
+                        mime_type = "application/iges"
+                    elif "STL" in export_format:
+                        file_bytes = exp3d.export_to_stl(mesh_3d, binary=True)
+                        ext = "stl"
+                        mime_type = "application/sla"
+                    elif "OBJ" in export_format:
+                        file_bytes = exp3d.export_to_obj(mesh_3d)
+                        ext = "obj"
+                        mime_type = "text/plain"
+                    else:
+                        file_bytes = exp3d.export_to_ply(mesh_3d)
+                        ext = "ply"
+                        mime_type = "application/octet-stream"
+
+                    file_size_kb = len(file_bytes) / 1024.0
+
+                    st.session_state["last_cad_export"] = {
+                        "bytes": file_bytes,
+                        "filename": f"{selected_export_type}_{selected_export_mode}_{int(size_x)}x{int(size_y)}x{int(size_z)}mm.{ext}",
+                        "mime": mime_type,
+                        "ext": ext,
+                        "num_v": num_v,
+                        "num_f": num_f,
+                        "size_kb": file_size_kb,
+                        "label": f"{selected_export_type.upper()}_{selected_export_mode.upper()}_{int(size_x)}mm.{ext}",
+                    }
+                except Exception as e:
+                    st.error(f"⚠️ Nie udało się wygenerować modelu 3D: {e}")
+
+        if "last_cad_export" in st.session_state:
+            cad_exp = st.session_state["last_cad_export"]
+            st.success(
+                f"Model **.{cad_exp['ext'].upper()}** gotowy do pobrania!\n\n"
+                f"• Wierzchołki: **{cad_exp['num_v']:,}** | Trójkąty: **{cad_exp['num_f']:,}** | Rozmiar pliku: **{cad_exp['size_kb']:.1f} KB**"
+            )
+            st.download_button(
+                label=f"💾 Pobierz plik {cad_exp['label']}",
+                data=cad_exp["bytes"],
+                file_name=cad_exp["filename"],
+                mime=cad_exp["mime"],
+                width="stretch",
+                key="cad_download_final_btn",
+            )
 
 # Stopka aplikacji
 st.markdown("---")
